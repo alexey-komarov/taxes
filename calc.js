@@ -14,56 +14,127 @@ function getDocIndex(table, row) {
 }
 
 function calc(tables) {
-	const transit = tables.transit;
+	const transitEur = tables.transitEur;
+	const transitUsd = tables.transitUsd;
 	const main = tables.main;
 	const eur = tables.eur;
+	const usd = tables.usd;
 	const records = [];
-	const courses = {};
-	const taxes = [];
 
-	for (let i = 0; i < transit.data.length; i++) {
-		if (transit.getValue('d_c', i) === 'D') {
-			continue;
+	const courses = {
+		EUR: {},
+		USD: {}
+	};
+
+	let exchange = {
+		EUR: {},
+		USD: {}
+	};
+
+	const taxes = [{}, {}, {}, {}];
+
+	function processValAcc(transitTbl, valTbl, valName) {
+		console.log('\n>>> Transit ' + valName + ':');
+
+		for (let i = 0; i < transitTbl.data.length; i++) {
+			if (transitTbl.getValue('d_c', i) === 'D') {
+				continue;
+			}
+
+			const date = transitTbl.getValue('date_oper', i);
+			const rate = transitTbl.getValue('bal_curr', i);
+			const sumVal = transitTbl.getValue('sum_val', i);
+
+			if (sumVal === '0.00') {
+				continue;
+			}
+
+			const payment = {
+				date: date,
+				from: transitTbl.getValue('plat_name', i),
+				rub: new Number((transitTbl.getValue('sum_val', i) * rate).
+					toFixed(2))
+			};
+
+			console.log(`Payment: ${payment.date} ${payment.from} ` +
+				`${sumVal} / ${payment.rub}`);
+
+			records.push(payment);
+			courses[valName][date] = new Number(rate);
 		}
 
-		const date = transit.getValue('date_oper', i);
-		const rate = transit.getValue('bal_curr', i);
+		console.log('\n>>> Exchange ' + valName + ':');
 
-		records.push({
-			date: date,
-			from: transit.getValue('plat_name', i),
-			rub: new Number((transit.getValue('sum_val', i) * rate).toFixed(2))
-		});
+		for (let i = 0; i < valTbl.data.length; i++) {
+			if (valTbl.getValue('d_c', i) === 'C') {
+				continue;
+			}
 
-		courses[date] = new Number(rate);
-	}
+			if (valTbl.getValue('plat_swift', i)) {
+				// External payment
+				continue;
+			}
 
-	let exchange = {};
+			if (valTbl.getValue('sum_val', i) === '0.00') {
+				continue;
+			}
 
-	for (let i = 0; i < eur.data.length; i++) {
-		if (eur.getValue('d_c', i) === 'C') {
-			continue;
+			const val = new Number(valTbl.getValue('sum_val', i));
+
+			const date = valTbl.getValue('date_oper', i);
+			const rate = new Number(valTbl.getValue('bal_curr', i));
+
+			const num = getDocIndex(valTbl, i);
+			const sum = new Number(val * rate).toFixed(2);
+
+
+			courses[valName][date] = rate;
+
+			console.log(date, padRight(val.toString(), 10), '*',
+				padRight(rate.toString(), 8), '=', sum);
+
+			assert(!(num in exchange[valName]));
+			exchange[valName][num] = val;
 		}
-
-		courses[eur.getValue('date_oper', i)] =
-			new Number(eur.getValue('bal_curr', i));
-
-		exchange[getDocIndex(eur, i)] =
-			new Number(eur.getValue('sum_val', i));
 	}
+
+	processValAcc(transitEur, eur, 'EUR');
+	processValAcc(transitUsd, usd, 'USD');
+	console.log('\n>>> Main:');
 
 	for (let i = 0; i < main.data.length; i++) {
 		let date = main.getValue('date_oper', i);
 		let sum = new Number(main.getValue('sum_val', i));
+		let taxPeriod = main.getValue('TaxPeriod', i);
 
+		// Paid taxes
 		if (main.getValue('d_c', i) === 'D') {
 			if (main.getValue('Pol_inn', i) === '2302067397' &&
-					main.getValue('TaxPeriod', i).endsWith(tables.year)) {
-				taxes.push({
-					date: date,
-					sum: new Number(sum),
-					text: main.getValue('text70', i)
-				});
+					taxPeriod.endsWith(tables.year)) {
+
+				let q = parseInt(taxPeriod.substr(3, 2)) - 1;
+
+				let text = main.getValue('text70', i);
+				let type;
+
+				if (text.indexOf('ФФОМС') >= 0) {
+					type = 'FFOMS';
+				} else if (text.indexOf('033-059-007183') >= 0) {
+					if (text.indexOf('1%') >= 0) {
+						type = 'PFR1';
+					} else {
+						type = 'PFR';
+					}
+				} else if (text.indexOf('налогообложения') >=0 ) {
+					type = 'TAX6';
+				}
+
+				if (!type) {
+					console.log('!!! Unknown tax payment:', text);
+					continue;
+				}
+
+				taxes[q][type] = new Number(sum);
 			}
 
 			continue;
@@ -76,27 +147,38 @@ function calc(tables) {
 		}
 
 		if (from.startsWith('IP KOMAROV ALEKSEI ARKADEVICH')) {
-			from = 'Convertation';
-			let rate = courses[date];
+			let valCode = main.getValue('plat_acc', i).substr(5, 3);
+
+			let valName = {
+				978: 'EUR',
+				840: 'USD'
+			}[valCode];
+
+			assert(valName, 'Unknown currency: ' + valCode);
+			from = 'Convertation ' + valName;
+
+			let rate = courses[valName][date];
 
 			if (!rate) {
-				abort('No courses');
+				abort(`No courses for ${valName} on ${date}`);
 			}
 
-			let corrSum = exchange[getDocIndex(main, i)];
+			let corrSum = exchange[valName][getDocIndex(main, i)];
 
 			if (!corrSum) {
 				abort('No correspondent document found for exchange operation');
 			}
 
-			var cbSum = rate * corrSum; 
+			let cbSum = rate * corrSum;
 
 			if (cbSum < sum) {
 				sum = new Number((sum - cbSum).toFixed(2));
 			} else {
-				continue
+				continue;
 			}
 		}
+
+		console.log(date, padRight(sum.toString(), 12), from);
 
 		records.push({
 			date: date,
@@ -105,44 +187,178 @@ function calc(tables) {
 		});
 	}
 
+	console.log('\nTotal:');
+
+	records.sort((a, b) => {
+		a = a.date.substr(6,4) + a.date.substr(3, 2) + a.date.substr(0, 2);
+		b = b.date.substr(6,4) + b.date.substr(3, 2) + b.date.substr(0, 2);
+
+		if (a < b) {
+			return -1;
+		} else if (a > b) {
+			return 1;
+		}
+
+		return 0;
+	});
+
 	let sum = 0;
 
+	let curQuarter = -1;
+	let qTotal = 0;
+
 	records.forEach(x => {
-		console.log(x.date, x.rub, x.from);
+		let q = getQuarter(x.date);
+
+		if (curQuarter !== q) {
+			if (curQuarter !== -1) {
+				console.log('TOTAL', qTotal);
+				qTotal = 0;
+			}
+
+			console.log('\nQUARTER', q + 1);
+			curQuarter = q;
+		}
+
+		console.log(x.date, padRight(x.rub.toString(), 12), x.from);
+		qTotal += x.rub;
 		sum += x.rub;
 	});
 
-	console.log(sum.toFixed(2));
+	console.log('TOTAL', qTotal, '\n');
+
+	let taxes6 = Math.round(sum * 0.06);
+
+	console.log('\n>>> TOTAL:   ', sum.toFixed(2));
+	console.log('>>> TAXES 6%:', taxes6);
+
 	let pfr = 0;
 
 	if (sum > 300000) {
 		pfr = Number(((sum - 300000) * 0.01).toFixed(2));
 	}
 
-	let pay = Math.round(sum * 0.06);
-	console.log('--------------------');
-	console.log('TAXES', pay);
-	console.log('PFR', pfr);
-	console.log('--------------------');
+	console.log('>>> PFR 1%:  ', pfr);
+	let quarters = [0, 0, 0, 0];
 
-	let paid = 0;
-	taxes.forEach(x => {
-		paid += x.sum;
-		console.log('PAID', x.date, x.sum, x.text);
+	records.forEach(x => {
+		quarters[getQuarter(x.date)] += x.rub;
 	});
 
-	console.log('--------------------');
-	console.log('PAY TAXES', Math.round(pay - paid - pfr));
-	console.log('PAY PFR', pfr);
-	console.log('PAY TOTAL', (Math.round(pay - paid - pfr) + pfr));
+	console.log('\n');
+	pfr = 0;
+	let pfrPrev = 0;
+	let taxes6Prev = 0;
+	taxes6 = 0;
+	sum = 0;
+
+	[0, 1, 2, 3].forEach(q => {
+		if (quarters[q] == 0) {
+			return;
+		}
+
+		sum += quarters[q];
+		sum = Number(sum.toFixed(2));
+
+		if (sum > 300000) {
+			pfr = Number(((sum - 300000) * 0.01).toFixed(2));
+		}
+
+		taxes6 = Number((sum * 0.06).toFixed(2));
+		let toPay = taxes6 - taxes6Prev;
+		let pfrToPay = pfr - pfrPrev;
+		let paidTotal;
+
+		console.log('Quarter:', q + 1);
+		console.log('Total:', quarters[q], sum);
+		console.log('PFR 1%:', pfrToPay, pfr);
+		console.log('Taxes:', Math.round(toPay), Math.round(taxes6));
+		console.log('\nPaid:');
+
+		if (taxes[q]) {
+			let paid = 0;
+
+			if (taxes[q].PFR1) {
+				if (taxes[q].PFR1 == pfrToPay) {
+					console.log('PFR 1% OK:', taxes[q].PFR1.toString());
+				} else {
+					console.log('PFR 1% NOT OK:', taxes[q].PFR1);
+				}
+
+				paid += taxes[q].PFR1;
+			} else {
+				console.log('PFR 1%: NOT PAID');
+			}
+
+			if (taxes[q].PFR) {
+				console.log('PFR:', taxes[q].PFR.toString());
+				paid += taxes[q].PFR;
+			} else {
+				console.log('PFR: NOT PAID');
+			}
+
+			if (taxes[q].FFOMS) {
+				console.log('FFOMS:', taxes[q].FFOMS.toString());
+				paid += taxes[q].FFOMS;
+			} else {
+				console.log('FFOMS: NOT PAID');
+			}
+
+			if (taxes[q].TAX6) {
+				if (Math.round(toPay - paid) == taxes[q].TAX6) {
+					console.log('6% OK:', taxes[q].TAX6.toString());
+				} else {
+					console.log('6% NOT OK:', taxes[q].TAX6.toString());
+				}
+
+				paid += taxes[q].TAX6;
+			} else {
+				console.log('6% NOT PAID');
+			}
+		}
+
+		console.log('\n');
+		pfrPrev += pfr;
+		taxes6Prev += taxes6;
+	});
+
+	console.log('>>> Pay:');
+
+	let tax6ToPay = Number((sum * 0.06).toFixed(2));
+
+	taxes.forEach(t => {
+		if (t.PFR1) {
+			pfr -= t.PFR1;
+			tax6ToPay -= t.PFR1;
+		}
+
+		if (t.PFR) {
+			tax6ToPay -= t.PFR;
+		}
+
+		if (t.FFOMS) {
+			tax6ToPay -= t.FFOMS;
+		}
+
+		if (t.TAX6) {
+			tax6ToPay -= t.TAX6;
+		}
+
+	});
+
+	console.log('Total:', Math.round(tax6ToPay));
+	console.log('PFR 1%:', pfr);
+	console.log('6%:', Math.round(tax6ToPay - pfr));
 }
 
 function buildTables(args) {
 	return {
 		year: args.year,
-		transit: parseCsv('transit', args.transitAccFile),
+		transitEur: parseCsv('transitEur', args.transitEurAccFile),
+		transitUsd: parseCsv('transitEur', args.transitUsdAccFile),
 		main: parseCsv('main', args.mainAccFile),
-		eur: parseCsv('eur', args.eurAccFile)
+		eur: parseCsv('eur', args.eurAccFile),
+		usd: parseCsv('usd', args.usdAccFile)
 	};
 }
 
@@ -217,8 +433,36 @@ function readFile(path) {
 
 function readData(args) {
 	let path = checkPath('data/' + args.year.toString());
-	args.transitAccFile = readFile(path + '/transit.csv');
+	args.transitEurAccFile = readFile(path + '/transitEur.csv');
+	args.transitUsdAccFile = readFile(path + '/transitUsd.csv');
 	args.mainAccFile = readFile(path + '/main.csv');
 	args.eurAccFile = readFile(path + '/eur.csv');
+	args.usdAccFile = readFile(path + '/usd.csv');
 	return args;
+}
+
+function padRight(str, len) {
+	while (str.length < len) {
+		str = str + ' ';
+	}
+
+	return str;
+}
+
+function getQuarter(strDate) {
+	let month = parseInt(strDate.substr(3, 2));
+
+	if (month < 4) {
+		return 0;
+	}
+
+	if (month < 7) {
+		return 1;
+	}
+
+	if (month < 10) {
+		return 2;
+	}
+
+	return 3;
 }
