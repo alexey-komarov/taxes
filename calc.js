@@ -146,6 +146,10 @@ function calc(tables) {
 			continue;
 		}
 
+		if (from.startsWith('ИП Комаров Алексей Аркадьевич')) {
+			continue;
+		}
+
 		if (from.startsWith('IP KOMAROV ALEKSEI ARKADEVICH')) {
 			let valCode = main.getValue('plat_acc', i).substr(5, 3);
 
@@ -247,10 +251,11 @@ function calc(tables) {
 
 	console.log('\n');
 	pfr = 0;
-	let pfrPrev = 0;
-	let taxes6Prev = 0;
 	taxes6 = 0;
 	sum = 0;
+	let paidTotal = 0;
+	let paidPfr = 0;
+	let paid = 0;
 
 	[0, 1, 2, 3].forEach(q => {
 		if (quarters[q] == 0) {
@@ -264,28 +269,28 @@ function calc(tables) {
 			pfr = Number(((sum - 300000) * 0.01).toFixed(2));
 		}
 
+		let pfrToPay = Number(pfr).toFixed(2) - paidPfr;
 		taxes6 = Number((sum * 0.06).toFixed(2));
-		let toPay = taxes6 - taxes6Prev;
-		let pfrToPay = pfr - pfrPrev;
-		let paidTotal;
 
 		console.log('Quarter:', q + 1);
-		console.log('Total:', quarters[q], sum);
-		console.log('PFR 1%:', pfrToPay, pfr);
-		console.log('Taxes:', Math.round(toPay), Math.round(taxes6));
+		console.log('Total:', 'Quarter =', quarters[q], 'Total =', sum);
+		console.log('PFR 1%:', Number(pfrToPay).toFixed(2));
+
+		console.log('Taxes:', 'Pay =', Math.round(taxes6 - paid),
+			'Total =', Math.round(taxes6));
+
 		console.log('\nPaid:');
 
 		if (taxes[q]) {
-			let paid = 0;
-
 			if (taxes[q].PFR1) {
 				if (taxes[q].PFR1 == pfrToPay) {
 					console.log('PFR 1% OK:', taxes[q].PFR1.toString());
 				} else {
-					console.log('PFR 1% NOT OK:', taxes[q].PFR1);
+					console.log('PFR 1% NOT OK:', taxes[q].PFR1.toString());
 				}
 
 				paid += taxes[q].PFR1;
+				paidPfr += taxes[q].PFR1;
 			} else {
 				console.log('PFR 1%: NOT PAID');
 			}
@@ -304,6 +309,8 @@ function calc(tables) {
 				console.log('FFOMS: NOT PAID');
 			}
 
+			let toPay = taxes6 - paid;
+
 			if (taxes[q].TAX6) {
 				if (Math.round(toPay - paid) == taxes[q].TAX6) {
 					console.log('6% OK:', taxes[q].TAX6.toString());
@@ -313,42 +320,12 @@ function calc(tables) {
 
 				paid += taxes[q].TAX6;
 			} else {
-				console.log('6% NOT PAID');
+				console.log('6% NOT PAID, PAY', Math.round(toPay));
 			}
 		}
 
 		console.log('\n');
-		pfrPrev += pfr;
-		taxes6Prev += taxes6;
 	});
-
-	console.log('>>> Pay:');
-
-	let tax6ToPay = Number((sum * 0.06).toFixed(2));
-
-	taxes.forEach(t => {
-		if (t.PFR1) {
-			pfr -= t.PFR1;
-			tax6ToPay -= t.PFR1;
-		}
-
-		if (t.PFR) {
-			tax6ToPay -= t.PFR;
-		}
-
-		if (t.FFOMS) {
-			tax6ToPay -= t.FFOMS;
-		}
-
-		if (t.TAX6) {
-			tax6ToPay -= t.TAX6;
-		}
-
-	});
-
-	console.log('Total:', Math.round(tax6ToPay));
-	console.log('PFR 1%:', pfr);
-	console.log('6%:', Math.round(tax6ToPay - pfr));
 }
 
 function buildTables(args) {
