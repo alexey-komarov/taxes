@@ -309,18 +309,18 @@ function calc(tables) {
 				console.log('FFOMS: NOT PAID');
 			}
 
-			let toPay = taxes6 - paid;
+			let toPay = Math.round(taxes6 - paid);
 
 			if (taxes[q].TAX6) {
-				if (Math.round(toPay - paid) == taxes[q].TAX6) {
+				if (toPay == taxes[q].TAX6) {
 					console.log('6% OK:', taxes[q].TAX6.toString());
 				} else {
-					console.log('6% NOT OK:', taxes[q].TAX6.toString());
+					console.log('6% NOT OK:', taxes[q].TAX6.toString(), toPay);
 				}
 
 				paid += taxes[q].TAX6;
 			} else {
-				console.log('6% NOT PAID, PAY', Math.round(toPay));
+				console.log('6% NOT PAID, PAY', toPay);
 			}
 		}
 
