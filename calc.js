@@ -14,20 +14,20 @@ function getDocIndex(table, row) {
 }
 
 function calc(tables) {
-	const transitEur = tables.transitEur;
+//	const transitEur = tables.transitEur;
 	const transitUsd = tables.transitUsd;
 	const main = tables.main;
-	const eur = tables.eur;
+//	const eur = tables.eur;
 	const usd = tables.usd;
 	const records = [];
 
 	const courses = {
-		EUR: {},
+//		EUR: {},
 		USD: {}
 	};
 
 	let exchange = {
-		EUR: {},
+//		EUR: {},
 		USD: {}
 	};
 
@@ -98,7 +98,7 @@ function calc(tables) {
 		}
 	}
 
-	processValAcc(transitEur, eur, 'EUR');
+//	processValAcc(transitEur, eur, 'EUR');
 	processValAcc(transitUsd, usd, 'USD');
 	console.log('\n>>> Main:');
 
@@ -154,7 +154,7 @@ function calc(tables) {
 			let valCode = main.getValue('plat_acc', i).substr(5, 3);
 
 			let valName = {
-				978: 'EUR',
+//				978: 'EUR',
 				840: 'USD'
 			}[valCode];
 
@@ -270,7 +270,7 @@ function calc(tables) {
 		}
 
 		let pfrToPay = Number(pfr).toFixed(2) - paidPfr;
-		taxes6 = Number((sum * 0.06).toFixed(2));
+		taxes6 = Math.round(sum * 0.06);
 
 		console.log('Quarter:', q + 1);
 		console.log('Total:', 'Quarter =', quarters[q], 'Total =', sum);
@@ -331,10 +331,10 @@ function calc(tables) {
 function buildTables(args) {
 	return {
 		year: args.year,
-		transitEur: parseCsv('transitEur', args.transitEurAccFile),
-		transitUsd: parseCsv('transitEur', args.transitUsdAccFile),
+//		transitEur: parseCsv('transitEur', args.transitEurAccFile),
+		transitUsd: parseCsv('transitUsd', args.transitUsdAccFile),
 		main: parseCsv('main', args.mainAccFile),
-		eur: parseCsv('eur', args.eurAccFile),
+//		eur: parseCsv('eur', args.eurAccFile),
 		usd: parseCsv('usd', args.usdAccFile)
 	};
 }
@@ -410,10 +410,10 @@ function readFile(path) {
 
 function readData(args) {
 	let path = checkPath('data/' + args.year.toString());
-	args.transitEurAccFile = readFile(path + '/transitEur.csv');
+//	args.transitEurAccFile = readFile(path + '/transitEur.csv');
 	args.transitUsdAccFile = readFile(path + '/transitUsd.csv');
 	args.mainAccFile = readFile(path + '/main.csv');
-	args.eurAccFile = readFile(path + '/eur.csv');
+//	args.eurAccFile = readFile(path + '/eur.csv');
 	args.usdAccFile = readFile(path + '/usd.csv');
 	return args;
 }
