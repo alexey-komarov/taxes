@@ -114,6 +114,16 @@ function calc(tables) {
 
 				let q = parseInt(taxPeriod.substr(3, 2)) - 1;
 
+				if (taxPeriod.startsWith('ПЛ')) {
+					if (q == 0) {
+						q = 1;
+					}
+					if (q == 1) {
+						q = 3;
+					}
+
+				}
+
 				let text = main.getValue('text70', i);
 				let type;
 
@@ -134,7 +144,8 @@ function calc(tables) {
 					continue;
 				}
 
-				taxes[q][type] = new Number(sum);
+				taxes[q] = taxes[q] || {};
+				taxes[q][type] = (taxes[q][type] || 0) + new Number(sum);
 			}
 
 			continue;
@@ -142,7 +153,7 @@ function calc(tables) {
 
 		let from = main.getValue('plat_name', i);
 
-		if (from === 'Комаров Алексей Аркадьевич Р/С 40817810108070009726') {
+		if (from.startsWith('Комаров Алексей Аркадьевич')) {
 			continue;
 		}
 
@@ -262,7 +273,9 @@ function calc(tables) {
 			return;
 		}
 
+		quarters[q] = Number(quarters[q].toFixed(2));
 		sum += quarters[q];
+
 		sum = Number(sum.toFixed(2));
 
 		if (sum > 300000) {
@@ -274,6 +287,7 @@ function calc(tables) {
 
 		console.log('Quarter:', q + 1);
 		console.log('Total:', 'Quarter =', quarters[q], 'Total =', sum);
+		console.log('6%:', Math.round(quarters[q] * 0.06));
 		console.log('PFR 1%:', Number(pfrToPay).toFixed(2));
 
 		console.log('Taxes:', 'Pay =', Math.round(taxes6 - paid),
@@ -298,6 +312,7 @@ function calc(tables) {
 			if (taxes[q].PFR) {
 				console.log('PFR:', taxes[q].PFR.toString());
 				paid += taxes[q].PFR;
+
 			} else {
 				console.log('PFR: NOT PAID');
 			}
@@ -318,7 +333,7 @@ function calc(tables) {
 					console.log('6% NOT OK:', taxes[q].TAX6.toString(), toPay);
 				}
 
-				paid += taxes[q].TAX6;
+				paid = Number((paid + taxes[q].TAX6).toFixed(2));
 			} else {
 				console.log('6% NOT PAID, PAY', toPay);
 			}
@@ -348,7 +363,6 @@ function parseCsv(table, data) {
 		data: lines.map(line => line.split(/\t/)),
 		getValue: function(field, row) {
 			let idx = this.fields.indexOf(field);
-
 			assert(idx > -1, 'No field "' + field + '" in table " ' +
 				table + '" ');
 
