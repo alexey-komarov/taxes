@@ -32,7 +32,6 @@ function calc(tables) {
 	};
 
 	const taxes = [{}, {}, {}, {}];
-
 	function processValAcc(transitTbl, valTbl, valName) {
 		console.log('\n>>> Transit ' + valName + ':');
 
@@ -45,7 +44,7 @@ function calc(tables) {
 			const rate = transitTbl.getValue('bal_curr', i);
 			const sumVal = transitTbl.getValue('sum_val', i);
 
-			if (sumVal === '0.00') {
+			if (sumVal === '0.00' || sumVal === '0,00') {
 				continue;
 			}
 
@@ -104,6 +103,7 @@ function calc(tables) {
 
 	for (let i = 0; i < main.data.length; i++) {
 		let date = main.getValue('date_oper', i);
+
 		let sum = new Number(main.getValue('sum_val', i));
 		let taxPeriod = main.getValue('TaxPeriod', i);
 
@@ -121,7 +121,6 @@ function calc(tables) {
 					if (q == 1) {
 						q = 3;
 					}
-
 				}
 
 				let text = main.getValue('text70', i);
@@ -157,6 +156,11 @@ function calc(tables) {
 			continue;
 		}
 
+		if (from.startsWith('УФК ПО КРАСНОДАРСКОМУ КРАЮ')) {
+			// Возврат ошибочного платежа
+			continue;
+		}
+
 		if (from.startsWith('ИП Комаров Алексей Аркадьевич')) {
 			continue;
 		}
@@ -182,6 +186,7 @@ function calc(tables) {
 
 			if (!corrSum) {
 				abort('No correspondent document found for exchange operation');
+				// continue;
 			}
 
 			let cbSum = rate * corrSum;
@@ -193,13 +198,15 @@ function calc(tables) {
 			}
 		}
 
-		console.log(date, padRight(sum.toString(), 12), from);
-
 		records.push({
 			date: date,
 			from: from,
 			rub: sum
 		});
+	}
+
+	if (process.argv[2] == '2021') {
+		taxes[1].TAX6 /= 2;
 	}
 
 	console.log('\nTotal:');
@@ -295,12 +302,14 @@ function calc(tables) {
 
 		console.log('\nPaid:');
 
+		pfrToPay = pfrToPay.toFixed(2)
+
 		if (taxes[q]) {
 			if (taxes[q].PFR1) {
 				if (taxes[q].PFR1 == pfrToPay) {
 					console.log('PFR 1% OK:', taxes[q].PFR1.toString());
 				} else {
-					console.log('PFR 1% NOT OK:', taxes[q].PFR1.toString());
+					console.log('PFR 1% NOT OK, paid:', taxes[q].PFR1.toString(), ' pay ', pfrToPay );
 				}
 
 				paid += taxes[q].PFR1;
